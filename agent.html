@@ -39,6 +39,16 @@
     margin-bottom: 1.5rem;
     text-align: center;
   }
+  .welcome-message {
+    background: #f1f5fb;
+    border: 1px solid #2563eb;
+    border-radius: 6px;
+    color: #111827;
+    padding: 1rem;
+    font-size: 1.12rem;
+    text-align: center;
+    margin-bottom: 1rem;
+  }
   label {
     display: block;
     margin-bottom: 0.6rem;
@@ -62,9 +72,8 @@
     font-weight: 600;
     cursor: pointer;
     border-radius: 6px;
-    width: 100%;
+    margin: 0.5rem 0.5rem 0.5rem 0;
     transition: background-color 0.25s ease;
-    margin-top: 0.6rem;
   }
   button:hover {
     background-color: #1d4ed8;
@@ -73,6 +82,7 @@
     margin-top: 1rem;
     font-size: 0.95rem;
     color: #dc2626;
+    text-align: center;
   }
   .status-message {
     background: #f3f4f6;
@@ -81,14 +91,14 @@
     padding: 1rem;
     color: #1e293b;
     margin-bottom: 1.3rem;
-    font-size: 1.12rem;
+    font-size: 1.1rem;
     text-align: center;
   }
   .agent-container {
     margin-top: 2rem;
     display: none;
   }
-  .demo-controls {
+  .session-controls {
     margin: 1rem 0 2rem 0;
     text-align: center;
   }
@@ -111,9 +121,9 @@
 <main>
 
   <div class="instructions">
-    Welcome! You’re about to use a special demo version of the Canadian Export AI Assistant.<br>
-    Enter your demo code to unlock access.<br>
-    Your access time and available questions will only be used while you are actively interacting with the agent.
+    Welcome! To begin, enter your demo code.<br>
+    You will receive personalized access, and only use time/questions when actively interacting.<br>
+    You can pause or exit anytime.
   </div>
 
   <div id="code-entry-area">
@@ -124,18 +134,18 @@
   </div>
 
   <div class="agent-container" id="agentArea">
-    <div class="status-message" id="statusMessage">
-      Demo access granted!<br>
-      <span id="statusTime"></span> &nbsp;|&nbsp; <span id="statusQuestions"></span>
+    <div class="welcome-message" id="welcomeMessage"></div>
+    <div class="status-message" id="statusMessage"></div>
+    <div class="session-controls" id="sessionControls">
+      <button id="startBtn">Start Demo Session</button>
+      <button id="pauseBtn" class="hide">Pause Session</button>
+      <button id="resumeBtn" class="hide">Resume Session</button>
+      <button id="stopBtn">Exit Session</button>
     </div>
-    <div class="demo-controls" id="demoControls">
-      <button id="startDemoBtn">Start Demo Session</button>
-      <button id="endDemoBtn" class="hide">End Demo Session</button>
-      <button id="sendMsgBtn" class="hide">Send Message to Agent</button>
-    </div>
-    <!-- Replace the above demo-controls block with your ElevenLabs agent widget and connect its events -->
-    <!-- Example: <elevenlabs-convai agent-id="..."></elevenlabs-convai> -->
+    <button id="sendMsgBtn" class="hide">Send Message to Agent</button>
+    <!-- Replace the above button with your agent widget and connect events to sendMsg -->
   </div>
+  <div id="exitMessage" class="hide message"></div>
 </main>
 
 <footer>
@@ -144,43 +154,50 @@
 
 <script>
 const demoCodes = {
-  "ADAM2025": { interactions: 12, minutes: 10 },
-  "ABDULVIP": { interactions: 8, minutes: 10 },
-  "ANDYTRIAL": { interactions: 10, minutes: 10 },
-  "CEDGROWTH": { interactions: 7, minutes: 10 }
+  "ADAM2025": { name: "Adam", interactions: 12, minutes: 10 },
+  "ABDULVIP": { name: "Abdul", interactions: 8, minutes: 10 },
+  "ANDYTRIAL": { name: "Andy", interactions: 10, minutes: 10 },
+  "CEDGROWTH": { name: "Ced", interactions: 7, minutes: 10 }
 };
 
+const contactEmail = "ask@rajbir.guru";
 let activeCode = '';
+let userName = '';
 let interactionsLeft = 0;
 let minutesLeft = 0;
 let secondsLeft = 0;
 let timerInterval = null;
 let isSessionActive = false;
 let interactionsUsed = 0;
+let paused = false;
 
 const accessCodeInput = document.getElementById("accessCode");
 const validateBtn = document.getElementById("validateBtn");
 const messageDiv = document.getElementById("message");
 const agentArea = document.getElementById("agentArea");
 const codeEntryArea = document.getElementById("code-entry-area");
+const welcomeMessage = document.getElementById("welcomeMessage");
 const statusMessage = document.getElementById("statusMessage");
-const statusTime = document.getElementById("statusTime");
-const statusQuestions = document.getElementById("statusQuestions");
-const demoControls = document.getElementById("demoControls");
-const startDemoBtn = document.getElementById("startDemoBtn");
-const endDemoBtn = document.getElementById("endDemoBtn");
+const sessionControls = document.getElementById("sessionControls");
+const startBtn = document.getElementById("startBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const resumeBtn = document.getElementById("resumeBtn");
+const stopBtn = document.getElementById("stopBtn");
 const sendMsgBtn = document.getElementById("sendMsgBtn");
+const exitMessage = document.getElementById("exitMessage");
 
 function loadUsage(code) {
   const use = JSON.parse(localStorage.getItem("agent_usage_" + code));
-  if (use && typeof use.interactions === 'number' && typeof use.minutes === 'number') {
+  if (use && typeof use.interactions === 'number' && typeof use.minutes === 'number' && use.name) {
     interactionsLeft = use.interactions;
     minutesLeft = use.minutes;
     interactionsUsed = use.totalUsed || 0;
+    userName = use.name;
   } else {
     interactionsLeft = demoCodes[code].interactions;
     minutesLeft = demoCodes[code].minutes;
     interactionsUsed = 0;
+    userName = demoCodes[code].name;
   }
   secondsLeft = 0;
 }
@@ -191,7 +208,8 @@ function saveUsage(code) {
     JSON.stringify({
       interactions: interactionsLeft,
       minutes: minutesLeft,
-      totalUsed: interactionsUsed
+      totalUsed: interactionsUsed,
+      name: userName
     })
   );
 }
@@ -200,69 +218,105 @@ function updateStatusMessage() {
   let min = minutesLeft > 0 ? minutesLeft : 0;
   let sec = secondsLeft > 0 ? secondsLeft : 0;
   if (sec < 10) sec = '0' + sec;
-  let timeText = "Time remaining: <strong>" + min + ":" + sec + "</strong> minutes";
-  let questionsText = "Questions remaining: <strong>" + interactionsLeft + "</strong>";
-  statusTime.innerHTML = timeText;
-  statusQuestions.innerHTML = questionsText;
+  let timeText = `Time remaining: <strong>${min}:${sec}</strong> minutes`;
+  let questionsText = `Questions remaining: <strong>${interactionsLeft}</strong>`;
+  statusMessage.innerHTML =
+    `Demo access granted!<br>${timeText} &nbsp;|&nbsp; ${questionsText}`;
 }
 
-function startDemoSession() {
+function updateWelcomeMessage() {
+  welcomeMessage.innerHTML =
+    `Welcome <strong>${userName}</strong>, here is a demo session created for you as a courtesy by SinghLabs.`;
+}
+
+function showExitMessage(custom) {
+  exitMessage.classList.remove("hide");
+  exitMessage.innerHTML =
+    custom ||
+    `Thank you for exploring Export AI Assistant.<br>We look forward to welcoming you back again.<br>
+     If your demo limit is reached, please contact SinghLabs at <a href="mailto:${contactEmail}">${contactEmail}</a>.`;
+}
+
+function startSession() {
   if (!isSessionActive && minutesLeft > 0 && interactionsLeft > 0) {
     isSessionActive = true;
-    startDemoBtn.classList.add("hide");
-    endDemoBtn.classList.remove("hide");
+    paused = false;
+    startBtn.classList.add("hide");
+    pauseBtn.classList.remove("hide");
+    resumeBtn.classList.add("hide");
     sendMsgBtn.classList.remove("hide");
+    exitMessage.classList.add("hide");
     timerInterval = setInterval(() => {
-      if (secondsLeft === 0) {
-        if (minutesLeft === 0) {
-          stopDemoSession();
-          lockOutUser("Time limit reached. Please contact us to upgrade.");
-          return;
+      if (!paused) {
+        if (secondsLeft === 0) {
+          if (minutesLeft === 0) {
+            stopSession(true);
+            showExitMessage(
+              `Your demo time limit has ended. Please contact SinghLabs at <a href="mailto:${contactEmail}">${contactEmail}</a> to request more access.`
+            );
+            return;
+          } else {
+            minutesLeft -= 1;
+            secondsLeft = 59;
+          }
         } else {
-          minutesLeft -= 1;
-          secondsLeft = 59;
+          secondsLeft -= 1;
         }
-      } else {
-        secondsLeft -= 1;
+        updateStatusMessage();
+        saveUsage(activeCode);
       }
-      updateStatusMessage();
-      saveUsage(activeCode);
     }, 1000);
   }
 }
 
-function stopDemoSession() {
+function pauseSession() {
+  paused = true;
+  pauseBtn.classList.add("hide");
+  resumeBtn.classList.remove("hide");
+}
+
+function resumeSession() {
+  paused = false;
+  pauseBtn.classList.remove("hide");
+  resumeBtn.classList.add("hide");
+}
+
+function stopSession(exit = false) {
   isSessionActive = false;
-  startDemoBtn.classList.remove("hide");
-  endDemoBtn.classList.add("hide");
+  startBtn.classList.remove("hide");
+  pauseBtn.classList.add("hide");
+  resumeBtn.classList.add("hide");
   sendMsgBtn.classList.add("hide");
   if (timerInterval) {
     clearInterval(timerInterval);
     timerInterval = null;
   }
+  saveUsage(activeCode);
+  if (exit) {
+    agentArea.style.display = "none";
+    codeEntryArea.style.display = "block";
+    showExitMessage();
+  }
 }
 
-function onUserInteractsWithAgent() {
-  if (interactionsLeft > 0 && isSessionActive) {
+function sendMsg() {
+  if (interactionsLeft > 0 && isSessionActive && !paused) {
     interactionsLeft -= 1;
     interactionsUsed += 1;
     updateStatusMessage();
     saveUsage(activeCode);
     if (interactionsLeft === 0) {
-      stopDemoSession();
-      lockOutUser("Interaction limit reached. Please contact us to upgrade.");
+      stopSession(true);
+      showExitMessage(
+        `Your demo questions limit is reached. Please contact SinghLabs at <a href="mailto:${contactEmail}">${contactEmail}</a> for more access.`
+      );
     }
   }
 }
 
-// Simulated agent session controls
-startDemoBtn.addEventListener("click", startDemoSession);
-endDemoBtn.addEventListener("click", stopDemoSession);
-sendMsgBtn.addEventListener("click", onUserInteractsWithAgent);
-
-// When demo access starts
 validateBtn.addEventListener("click", () => {
   const code = accessCodeInput.value.trim().toUpperCase();
+  exitMessage.classList.add("hide");
   if (!code) {
     messageDiv.textContent = "Please enter a demo access code.";
     messageDiv.style.color = "#dc2626";
@@ -272,19 +326,30 @@ validateBtn.addEventListener("click", () => {
     activeCode = code;
     loadUsage(code);
     if (interactionsLeft === 0 || minutesLeft === 0) {
-      lockOutUser("Your demo period has expired. Please contact us to upgrade.");
+      codeEntryArea.style.display = "none";
+      agentArea.style.display = "none";
+      showExitMessage(
+        `Your demo limit is reached. Please contact SinghLabs at <a href="mailto:${contactEmail}">${contactEmail}</a> for more access.`
+      );
       return;
     }
+    messageDiv.textContent = "";
     codeEntryArea.style.display = "none";
     agentArea.style.display = "block";
-    messageDiv.textContent = "";
+    updateWelcomeMessage();
     updateStatusMessage();
-    stopDemoSession(); // Always start in idle state
+    stopSession(); // start with idle state
   } else {
     messageDiv.textContent = "Invalid demo code. Please try again or contact support.";
     messageDiv.style.color = "#dc2626";
   }
 });
+
+startBtn.addEventListener("click", startSession);
+pauseBtn.addEventListener("click", pauseSession);
+resumeBtn.addEventListener("click", resumeSession);
+stopBtn.addEventListener("click", () => stopSession(true));
+sendMsgBtn.addEventListener("click", sendMsg);
 
 window.addEventListener("DOMContentLoaded", () => {
   for (let code in demoCodes) {
@@ -294,8 +359,15 @@ window.addEventListener("DOMContentLoaded", () => {
       if (interactionsLeft > 0 && minutesLeft > 0) {
         codeEntryArea.style.display = "none";
         agentArea.style.display = "block";
+        updateWelcomeMessage();
         updateStatusMessage();
-        stopDemoSession();
+        stopSession(); // Show idle state
+      } else {
+        codeEntryArea.style.display = "none";
+        agentArea.style.display = "none";
+        showExitMessage(
+          `Your demo limit is reached. Please contact SinghLabs at <a href="mailto:${contactEmail}">${contactEmail}</a> for more access.`
+        );
       }
       break;
     }
