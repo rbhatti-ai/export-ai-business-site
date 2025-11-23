@@ -64,6 +64,7 @@
     border-radius: 6px;
     width: 100%;
     transition: background-color 0.25s ease;
+    margin-top: 0.6rem;
   }
   button:hover {
     background-color: #1d4ed8;
@@ -87,6 +88,13 @@
     margin-top: 2rem;
     display: none;
   }
+  .demo-controls {
+    margin: 1rem 0 2rem 0;
+    text-align: center;
+  }
+  .hide {
+    display: none!important;
+  }
   footer {
     margin-top: auto;
     padding: 1rem;
@@ -105,7 +113,7 @@
   <div class="instructions">
     Welcome! You’re about to use a special demo version of the Canadian Export AI Assistant.<br>
     Enter your demo code to unlock access.<br>
-    You will see your time and allowed questions; when either runs out, you’ll be invited to upgrade.
+    Your access time and available questions will only be used while you are actively interacting with the agent.
   </div>
 
   <div id="code-entry-area">
@@ -117,13 +125,16 @@
 
   <div class="agent-container" id="agentArea">
     <div class="status-message" id="statusMessage">
-      <!-- Updated by JS -->
       Demo access granted!<br>
       <span id="statusTime"></span> &nbsp;|&nbsp; <span id="statusQuestions"></span>
     </div>
-    <!-- ElevenLabs agent widget embed - put your real agent-id below -->
-    <elevenlabs-convai agent-id="agent_1301kacqfhgjftpaan3a91vxm8kk"></elevenlabs-convai>
-    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async defer></script>
+    <div class="demo-controls" id="demoControls">
+      <button id="startDemoBtn">Start Demo Session</button>
+      <button id="endDemoBtn" class="hide">End Demo Session</button>
+      <button id="sendMsgBtn" class="hide">Send Message to Agent</button>
+    </div>
+    <!-- Replace the above demo-controls block with your ElevenLabs agent widget and connect its events -->
+    <!-- Example: <elevenlabs-convai agent-id="..."></elevenlabs-convai> -->
   </div>
 </main>
 
@@ -143,9 +154,9 @@ let activeCode = '';
 let interactionsLeft = 0;
 let minutesLeft = 0;
 let secondsLeft = 0;
-let timerInterval;
+let timerInterval = null;
+let isSessionActive = false;
 let interactionsUsed = 0;
-let autoDecrementInterval;
 
 const accessCodeInput = document.getElementById("accessCode");
 const validateBtn = document.getElementById("validateBtn");
@@ -155,6 +166,10 @@ const codeEntryArea = document.getElementById("code-entry-area");
 const statusMessage = document.getElementById("statusMessage");
 const statusTime = document.getElementById("statusTime");
 const statusQuestions = document.getElementById("statusQuestions");
+const demoControls = document.getElementById("demoControls");
+const startDemoBtn = document.getElementById("startDemoBtn");
+const endDemoBtn = document.getElementById("endDemoBtn");
+const sendMsgBtn = document.getElementById("sendMsgBtn");
 
 function loadUsage(code) {
   const use = JSON.parse(localStorage.getItem("agent_usage_" + code));
@@ -191,59 +206,61 @@ function updateStatusMessage() {
   statusQuestions.innerHTML = questionsText;
 }
 
-function startTimerAndAutoDecrement() {
-  updateStatusMessage();
-
-  timerInterval = setInterval(() => {
-    if (secondsLeft === 0) {
-      if (minutesLeft === 0) {
-        clearInterval(timerInterval);
-        clearInterval(autoDecrementInterval);
-        updateStatusMessage();
-        alert("Your demo session has ended due to time limit.");
-        lockOutUser("Time limit reached. Please contact us to upgrade.");
-        return;
+function startDemoSession() {
+  if (!isSessionActive && minutesLeft > 0 && interactionsLeft > 0) {
+    isSessionActive = true;
+    startDemoBtn.classList.add("hide");
+    endDemoBtn.classList.remove("hide");
+    sendMsgBtn.classList.remove("hide");
+    timerInterval = setInterval(() => {
+      if (secondsLeft === 0) {
+        if (minutesLeft === 0) {
+          stopDemoSession();
+          lockOutUser("Time limit reached. Please contact us to upgrade.");
+          return;
+        } else {
+          minutesLeft -= 1;
+          secondsLeft = 59;
+        }
       } else {
-        minutesLeft -= 1;
-        secondsLeft = 59;
+        secondsLeft -= 1;
       }
-    } else {
-      secondsLeft -= 1;
-    }
-    updateStatusMessage();
-    saveUsage(activeCode);
-  }, 1000);
-
-  autoDecrementInterval = setInterval(() => {
-    if (agentArea.style.display === "block" && interactionsLeft > 0) {
-      decreaseInteraction();
-    }
-  }, 30000); // Every 30 seconds
+      updateStatusMessage();
+      saveUsage(activeCode);
+    }, 1000);
+  }
 }
 
-function decreaseInteraction() {
-  if (interactionsLeft > 0) {
+function stopDemoSession() {
+  isSessionActive = false;
+  startDemoBtn.classList.remove("hide");
+  endDemoBtn.classList.add("hide");
+  sendMsgBtn.classList.add("hide");
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+}
+
+function onUserInteractsWithAgent() {
+  if (interactionsLeft > 0 && isSessionActive) {
     interactionsLeft -= 1;
     interactionsUsed += 1;
     updateStatusMessage();
     saveUsage(activeCode);
     if (interactionsLeft === 0) {
-      clearInterval(autoDecrementInterval);
-      alert("Your demo session has ended due to interaction limit.");
+      stopDemoSession();
       lockOutUser("Interaction limit reached. Please contact us to upgrade.");
     }
   }
 }
 
-function lockOutUser(reason) {
-  agentArea.style.display = "none";
-  messageDiv.style.color = "#dc2626";
-  messageDiv.textContent = reason;
-  codeEntryArea.style.display = "block";
-  clearInterval(timerInterval);
-  clearInterval(autoDecrementInterval);
-}
+// Simulated agent session controls
+startDemoBtn.addEventListener("click", startDemoSession);
+endDemoBtn.addEventListener("click", stopDemoSession);
+sendMsgBtn.addEventListener("click", onUserInteractsWithAgent);
 
+// When demo access starts
 validateBtn.addEventListener("click", () => {
   const code = accessCodeInput.value.trim().toUpperCase();
   if (!code) {
@@ -262,7 +279,7 @@ validateBtn.addEventListener("click", () => {
     agentArea.style.display = "block";
     messageDiv.textContent = "";
     updateStatusMessage();
-    startTimerAndAutoDecrement();
+    stopDemoSession(); // Always start in idle state
   } else {
     messageDiv.textContent = "Invalid demo code. Please try again or contact support.";
     messageDiv.style.color = "#dc2626";
@@ -278,7 +295,7 @@ window.addEventListener("DOMContentLoaded", () => {
         codeEntryArea.style.display = "none";
         agentArea.style.display = "block";
         updateStatusMessage();
-        startTimerAndAutoDecrement();
+        stopDemoSession();
       }
       break;
     }
