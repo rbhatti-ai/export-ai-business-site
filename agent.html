@@ -1,1 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Export AI Assistant - Demo Access</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f3f4f6;
+    color: #1f2937;
+    margin: 0; padding: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: start; min-height: 100vh;
+  }
+  header {
+    background-color: #2563eb;
+    color: white;
+    width: 100%;
+    padding: 1.5rem 0;
+    text-align: center;
+    font-size: 1.8rem;
+  }
+  main {
+    max-width: 540px;
+    margin: 2rem auto;
+    background: white;
+    padding: 2rem 2.5rem;
+    border-radius: 8px;
+    box-shadow: 0 6px 15px rgb(0 0 0 / 0.1);
+    width: 90%;
+  }
+  label {
+    display: block;
+    margin-bottom: 0.6rem;
+    font-weight: 600;
+  }
+  input[type=text] {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    font-size: 1rem;
+    border: 2px solid #cbd5e1;
+    border-radius: 5px;
+    margin-bottom: 1.2rem;
+    box-sizing: border-box;
+  }
+  button {
+    background-color: #2563eb;
+    border: none;
+    color: white;
+    padding: 0.8rem 2rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 6px;
+    width: 100%;
+    transition: background-color 0.25s ease;
+  }
+  button:hover {
+    background-color: #1d4ed8;
+  }
+  .message {
+    margin-top: 1rem;
+    font-size: 0.95rem;
+    color: #dc2626;
+  }
+  .agent-container {
+    margin-top: 2rem;
+    display: none;
+  }
+  footer {
+    margin-top: auto;
+    padding: 1rem;
+    font-size: 0.85rem;
+    color: #6b7280;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>Export AI Assistant - Demo Access</header>
+
+<main>
+  <div id="code-entry-area">
+    <label for="accessCode">Enter Your Demo Access Code:</label>
+    <input type="text" id="accessCode" placeholder="Demo Code Here" />
+    <button id="validateBtn">Validate Code</button>
+    <div class="message" id="message"></div>
+  </div>
+
+  <div class="agent-container" id="agentArea">
+    <p><strong>Demo access granted.</strong> You have <span id="remaining">10</span> interactions remaining.</p>
+    <!-- ElevenLabs agent widget embed -->
+    <elevenlabs-convai agent-id="agent_1301kacqfhgjftpaan3a91vxm8kk"></elevenlabs-convai>
+    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async defer></script>
+  </div>
+</main>
+
+<footer>
+  © 2025 Canadian Export AI Assistant | SinghLabs
+</footer>
+
+<script>
+  const validCodes = ["DEMO2025", "INVITEONLY", "EXPORTTRIAL"]; // Add your real demo codes here
+  const maxInteractions = 10;
+  let interactionsLeft = maxInteractions;
+
+  const accessCodeInput = document.getElementById("accessCode");
+  const validateBtn = document.getElementById("validateBtn");
+  const messageDiv = document.getElementById("message");
+  const agentArea = document.getElementById("agentArea");
+  const remainingSpan = document.getElementById("remaining");
+  const codeEntryArea = document.getElementById("code-entry-area");
+
+  // Simple interactions counter for demo (increment when agent widget is used - simulated here)
+  // Real integration would track actual queries or time — this example is a placeholder
+  function decreaseInteraction() {
+    if (interactionsLeft > 0) {
+      interactionsLeft -= 1;
+      remainingSpan.textContent = interactionsLeft;
+      if (interactionsLeft === 0) {
+        alert("Your demo session has expired. Please contact us to upgrade.");
+        lockOutUser();
+      }
+    }
+  }
+
+  function lockOutUser() {
+    agentArea.style.display = "none";
+    messageDiv.style.color = "#dc2626";
+    messageDiv.textContent = "Demo limit reached. Please contact us to upgrade your access.";
+    codeEntryArea.style.display = "block";
+  }
+
+  validateBtn.addEventListener("click", () => {
+    const code = accessCodeInput.value.trim().toUpperCase();
+    if (!code) {
+      messageDiv.textContent = "Please enter a demo access code.";
+      messageDiv.style.color = "#dc2626";
+      return;
+    }
+    if (validCodes.includes(code)) {
+      // Valid code - show agent and hide code entry
+      codeEntryArea.style.display = "none";
+      agentArea.style.display = "block";
+      messageDiv.textContent = "";
+      interactionsLeft = maxInteractions;
+      remainingSpan.textContent = interactionsLeft;
+      // Start demo session countdown or tracking here if needed
+    } else {
+      messageDiv.textContent = "Invalid demo code. Please try again or contact support.";
+      messageDiv.style.color = "#dc2626";
+    }
+  });
+
+  // Simulate interaction decreases every 30 seconds for demo purpose
+  // Remove or replace with real agent interaction event hooks
+  /*
+  setInterval(() => {
+    if (agentArea.style.display === "block" && interactionsLeft > 0) {
+      decreaseInteraction();
+    }
+  }, 30000);
+  */
+</script>
+
+</body>
+</html>
 
