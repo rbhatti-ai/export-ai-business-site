@@ -34,7 +34,7 @@
     margin-bottom: 0.6rem;
     font-weight: 600;
   }
-  input[type=text] {
+  input[type="text"] {
     width: 100%;
     padding: 0.6rem 0.8rem;
     font-size: 1rem;
@@ -91,7 +91,9 @@
   <div class="agent-container" id="agentArea">
     <p>
       <strong>Demo access granted.</strong><br>
-      You have <span id="remaining">0</span> interactions and <span id="minutesRemaining">0</span> minutes remaining.
+      Time left: <span id="timer">10:00</span> minutes<br>
+      Interactions used: <span id="interactionsUsed">0</span> /
+      <span id="interactionsTotal">0</span>
     </p>
     <!-- ElevenLabs agent widget embed - put your real agent-id below -->
     <elevenlabs-convai agent-id="agent_1301kacqfhgjftpaan3a91vxm8kk"></elevenlabs-convai>
@@ -104,134 +106,157 @@
 </footer>
 
 <script>
-  // Demo codes mapped to testers with interaction and minute limits
-  const demoCodes = {
-    "ADAM2025": { interactions: 12, minutes: 10 },
-    "ABDULVIP": { interactions: 8, minutes: 10 },
-    "ANDYTRIAL": { interactions: 10, minutes: 10 },
-    "CEDGROWTH": { interactions: 7, minutes: 10 }
-  };
+const demoCodes = {
+  "ADAM2025": { interactions: 12, minutes: 10 },
+  "ABDULVIP": { interactions: 8, minutes: 10 },
+  "ANDYTRIAL": { interactions: 10, minutes: 10 },
+  "CEDGROWTH": { interactions: 7, minutes: 10 }
+};
 
-  let activeCode = '';
-  let interactionsLeft = 0;
-  let minutesLeft = 0;
-  let timerInterval;
+let activeCode = '';
+let interactionsLeft = 0;
+let minutesLeft = 0;
+let secondsLeft = 0;
+let timerInterval;
+let interactionsUsed = 0;
 
-  const accessCodeInput = document.getElementById("accessCode");
-  const validateBtn = document.getElementById("validateBtn");
-  const messageDiv = document.getElementById("message");
-  const agentArea = document.getElementById("agentArea");
-  const remainingSpan = document.getElementById("remaining");
-  const minutesSpan = document.getElementById("minutesRemaining");
-  const codeEntryArea = document.getElementById("code-entry-area");
+const accessCodeInput = document.getElementById("accessCode");
+const validateBtn = document.getElementById("validateBtn");
+const messageDiv = document.getElementById("message");
+const agentArea = document.getElementById("agentArea");
+const remainingSpan = document.getElementById("remaining");
+const minutesSpan = document.getElementById("minutesRemaining");
+const timerSpan = document.getElementById("timer");
+const interactionsUsedSpan = document.getElementById("interactionsUsed");
+const interactionsTotalSpan = document.getElementById("interactionsTotal");
+const codeEntryArea = document.getElementById("code-entry-area");
 
-  function loadUsage(code) {
-    const use = JSON.parse(localStorage.getItem("agent_usage_" + code));
-    if (use && typeof use.interactions === 'number' && typeof use.minutes === 'number') {
-      interactionsLeft = use.interactions;
-      minutesLeft = use.minutes;
-    } else {
-      interactionsLeft = demoCodes[code].interactions;
-      minutesLeft = demoCodes[code].minutes;
-    }
+function loadUsage(code) {
+  const use = JSON.parse(localStorage.getItem("agent_usage_" + code));
+  if (use && typeof use.interactions === 'number' && typeof use.minutes === 'number') {
+    interactionsLeft = use.interactions;
+    minutesLeft = use.minutes;
+    interactionsUsed = use.totalUsed || 0;
+  } else {
+    interactionsLeft = demoCodes[code].interactions;
+    minutesLeft = demoCodes[code].minutes;
+    interactionsUsed = 0;
   }
+  secondsLeft = 0; // Start at :00 seconds
+}
 
-  function saveUsage(code) {
-    localStorage.setItem(
-      "agent_usage_" + code,
-      JSON.stringify({ interactions: interactionsLeft, minutes: minutesLeft })
-    );
-  }
+function saveUsage(code) {
+  localStorage.setItem(
+    "agent_usage_" + code,
+    JSON.stringify({
+      interactions: interactionsLeft,
+      minutes: minutesLeft,
+      totalUsed: interactionsUsed
+    })
+  );
+}
 
-  function startTimer() {
-    timerInterval = setInterval(() => {
-      if (minutesLeft > 0) {
+function updateTimerDisplay() {
+  let min = minutesLeft > 0 ? minutesLeft : 0;
+  let sec = secondsLeft > 0 ? secondsLeft : 0;
+  if (sec < 10) sec = '0' + sec;
+  timerSpan.textContent = min + ':' + sec;
+}
+
+function updateInteractionsDisplay() {
+  interactionsUsedSpan.textContent = interactionsUsed;
+  interactionsTotalSpan.textContent = interactionsUsed + interactionsLeft;
+}
+
+function startTimer() {
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    if (secondsLeft === 0) {
+      if (minutesLeft === 0) {
+        clearInterval(timerInterval);
+        timerSpan.textContent = "0:00";
+        alert("Your demo session has ended due to time limit.");
+        lockOutUser("Time limit reached. Please contact us to upgrade.");
+        return;
+      } else {
         minutesLeft -= 1;
-        saveUsage(activeCode);
-        minutesSpan.textContent = minutesLeft;
-        if (minutesLeft === 0) {
-          clearInterval(timerInterval);
-          alert("Your demo session has ended due to time limit.");
-          lockOutUser("Time limit reached. Please contact us to upgrade.");
-        }
+        secondsLeft = 59;
       }
-    }, 60000); // Trigger every minute
-  }
+    } else {
+      secondsLeft -= 1;
+    }
+    updateTimerDisplay();
+    saveUsage(activeCode);
+  }, 1000); // Every second
+}
 
-  function decreaseInteraction() {
-    if (interactionsLeft > 0) {
-      interactionsLeft -= 1;
-      remainingSpan.textContent = interactionsLeft;
-      saveUsage(activeCode);
-      if (interactionsLeft === 0) {
-        alert("Your demo session has ended due to interaction limit.");
-        lockOutUser("Interaction limit reached. Please contact us to upgrade.");
-      }
+function decreaseInteraction() {
+  if (interactionsLeft > 0) {
+    interactionsLeft -= 1;
+    interactionsUsed += 1;
+    updateInteractionsDisplay();
+    saveUsage(activeCode);
+    if (interactionsLeft === 0) {
+      alert("Your demo session has ended due to interaction limit.");
+      lockOutUser("Interaction limit reached. Please contact us to upgrade.");
     }
   }
+}
 
-  function lockOutUser(reason) {
-    agentArea.style.display = "none";
+// When demo access starts
+validateBtn.addEventListener("click", () => {
+  const code = accessCodeInput.value.trim().toUpperCase();
+  if (!code) {
+    messageDiv.textContent = "Please enter a demo access code.";
     messageDiv.style.color = "#dc2626";
-    messageDiv.textContent = reason;
-    codeEntryArea.style.display = "block";
-    clearInterval(timerInterval);
+    return;
   }
-
-  validateBtn.addEventListener("click", () => {
-    const code = accessCodeInput.value.trim().toUpperCase();
-    if (!code) {
-      messageDiv.textContent = "Please enter a demo access code.";
-      messageDiv.style.color = "#dc2626";
+  if (demoCodes[code]) {
+    activeCode = code;
+    loadUsage(code);
+    if (interactionsLeft === 0 || minutesLeft === 0) {
+      lockOutUser("Your demo period has expired. Please contact us to upgrade.");
       return;
     }
-    if (demoCodes[code]) {
+    codeEntryArea.style.display = "none";
+    agentArea.style.display = "block";
+    messageDiv.textContent = "";
+    updateTimerDisplay();
+    updateInteractionsDisplay();
+    startTimer();
+  } else {
+    messageDiv.textContent = "Invalid demo code. Please try again or contact support.";
+    messageDiv.style.color = "#dc2626";
+  }
+});
+
+// For real deployment: Call decreaseInteraction() when user sends a message
+// For demo/testing: Uncomment below to simulate (every 30 seconds)
+/*
+setInterval(() => {
+  if (agentArea.style.display === "block" && interactionsLeft > 0) {
+    decreaseInteraction();
+  }
+}, 30000);
+*/
+
+// Automatically show remaining uses if valid and show agent
+window.addEventListener("DOMContentLoaded", () => {
+  for (let code in demoCodes) {
+    if (localStorage.getItem("agent_usage_" + code)) {
       activeCode = code;
       loadUsage(code);
-      if (interactionsLeft === 0 || minutesLeft === 0) {
-        lockOutUser("Your demo period has expired. Please contact us to upgrade.");
-        return;
+      if (interactionsLeft > 0 && minutesLeft > 0) {
+        codeEntryArea.style.display = "none";
+        agentArea.style.display = "block";
+        updateTimerDisplay();
+        updateInteractionsDisplay();
+        startTimer();
       }
-      remainingSpan.textContent = interactionsLeft;
-      minutesSpan.textContent = minutesLeft;
-      codeEntryArea.style.display = "none";
-      agentArea.style.display = "block";
-      messageDiv.textContent = "";
-      startTimer();
-    } else {
-      messageDiv.textContent = "Invalid demo code. Please try again or contact support.";
-      messageDiv.style.color = "#dc2626";
+      break;
     }
-  });
-
-  // For real deployment: Call decreaseInteraction() when user sends a message
-  // For demo/testing: Uncomment below to simulate (every 30 seconds)
-  /*
-  setInterval(() => {
-    if (agentArea.style.display === "block" && interactionsLeft > 0) {
-      decreaseInteraction();
-    }
-  }, 30000);
-  */
-
-  // Automatically reload remaining uses if valid and show agent
-  window.addEventListener("DOMContentLoaded", () => {
-    // Look for existing code in localStorage
-    for (let code in demoCodes) {
-      if (localStorage.getItem("agent_usage_" + code)) {
-        activeCode = code;
-        loadUsage(code);
-        if (interactionsLeft > 0 && minutesLeft > 0) {
-          remainingSpan.textContent = interactionsLeft;
-          minutesSpan.textContent = minutesLeft;
-          codeEntryArea.style.display = "none";
-          agentArea.style.display = "block";
-          startTimer();
-        }
-        break;
-      }
-    }
-  });
+  }
+});
 </script>
 
 </body>
